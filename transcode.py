@@ -76,9 +76,22 @@ def season_number(dir_name: str) -> int | None:
     return int(match.group()) if match else None
 
 
-def title_number(filename: str) -> int:
-    match = re.search(r"_t(\d+)\.mkv$", filename, re.IGNORECASE)
-    return int(match.group(1)) if match else 999
+# def title_number(filename: str) -> int:
+#     match = re.search(r"_t(\d+)\.mkv$", filename, re.IGNORECASE)
+#     return int(match.group(1)) if match else 999
+
+
+def file_sort_key(filename: str) -> tuple[int, int]:
+    disc_match = re.search(r"disc\s*(\d+)", filename, re.IGNORECASE)
+    disc = int(disc_match.group(1)) if disc_match else 0
+    title_match = re.search(r"_t(\d+)\.mkv$", filename, re.IGNORECASE)
+    title = int(title_match.group(1)) if title_match else 999
+    return (disc, title)
+
+
+def disc_number(dir_name: str) -> int:
+    match = re.search(r"disc\s*(\d+)", dir_name, re.IGNORECASE)
+    return int(match.group(1)) if match else 0
 
 
 def process_show(show_name: str, show_src: Path) -> None:
@@ -87,26 +100,35 @@ def process_show(show_name: str, show_src: Path) -> None:
         if d.is_dir() and d.name.lower().startswith("season")
     )
 
+    seasons: dict[int, list[Path]] = {}
     for season_dir in season_dirs:
         snum = season_number(season_dir.name)
         if snum is None:
             log.warning("Skipping %s - couldn't parse season number", season_dir.name)
             continue
+        seasons.setdefault(snum, []).append(season_dir)
 
-        mkv_files = sorted(
-            [f for f in season_dir.iterdir() if f.suffix.lower() == ".mkv"],
-            key=lambda f: title_number(f.name),
-        )
+    for snum in seasons:
+        seasons[snum].sort(key=lambda d: disc_number(d.name))
 
-        if not mkv_files:
-            log.warning("Skipping %s - no MKV files found", season_dir.name)
+    for snum, disc_dirs in sorted(seasons.items()):
+        all_mkv_files =[]
+        for disc_dir in disc_dirs:
+            disc_mkvs = sorted(
+                [f for f in disc_dir.iterdir() if f.suffix.lower() == ".mkv"],
+                key=lambda f: file_sort_key(f.name),
+            )
+            all_mkv_files.extend(disc_mkvs)
+
+        if not all_mkv_files:
+            log.warning("Skipping season %d - no MKV files found", snum)
             continue
 
         season_str = f"Season {snum:02d}"
         dest_season = DEST_DIR / show_name / season_str
         ensure_dir(dest_season)
 
-        for ep_num, src_file in enumerate(mkv_files, start=1):
+        for ep_num, src_file in enumerate(all_mkv_files, start=1):
             ep_str = f"S{snum:02d}E{ep_num:02d}"
             dest_name = f"{show_name} - {ep_str}.mp4"
             dest_file = dest_season / dest_name
