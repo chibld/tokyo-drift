@@ -76,11 +76,6 @@ def season_number(dir_name: str) -> int | None:
     return int(match.group()) if match else None
 
 
-# def title_number(filename: str) -> int:
-#     match = re.search(r"_t(\d+)\.mkv$", filename, re.IGNORECASE)
-#     return int(match.group(1)) if match else 999
-
-
 def file_sort_key(filename: str) -> tuple[int, int]:
     disc_match = re.search(r"disc\s*(\d+)", filename, re.IGNORECASE)
     disc = int(disc_match.group(1)) if disc_match else 0
